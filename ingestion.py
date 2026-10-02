@@ -27,6 +27,14 @@ MANUAL_MATCHES = {
     "13304016": "Muffin, cake-style, citrus",
 }
 
+# Every category not listed here is treated as ready to eat (no cooking needed)
+NEEDS_COOKING_CATEGORIES = [
+    "Rice, grains and flours", "Pasta and noodles, plain", "Pasta and noodles, with additions",
+    "Fish, unprocessed, without additions", "Fish, processed, battered or crumbed",
+    "Eggs, without additions", "Red meat, fat fully-trimmed", "Red meat, untrimmed or semi-trimmed",
+    "Poultry", "Meat substitutes and dishes", "Potatoes, unprocessed", "Potatoes, processed",
+]
+
 def token_sort(text):
     return " ".join(sorted(str(text).lower().replace(",", " ").split()))
 
@@ -127,6 +135,7 @@ def run_etl():
             print(f"  {method} {score:.2f}: {row['product_name']!r} -> {name_by_key[key]!r}")
         else:
             print(f"  dropped: {row['product_name']!r} ({code})")
+    products = products.dropna(subset=["food_key"])
 
     # Attach nutrients (per 100 g) and descriptions
     products = products.merge(nutrients, on="food_key", how="left")
@@ -135,6 +144,12 @@ def run_etl():
     )
     products[MACRO_COLS] = products[MACRO_COLS].apply(pd.to_numeric, errors="coerce")
     products["kcal"] = (products["energy_kj"] / 4.184).round(1)
+
+    unknown = set(NEEDS_COOKING_CATEGORIES) - set(products["category"])
+    if unknown:
+        print(f"  warning: NEEDS_COOKING_CATEGORIES not found in data: {sorted(unknown)}")
+    products["ready_to_eat"] = ~products["category"].isin(NEEDS_COOKING_CATEGORIES)
+    print(f"  ready to eat: {products['ready_to_eat'].sum()}, needs cooking: {(~products['ready_to_eat']).sum()}")
 
     # Words only: numbers belong in filters, not in the embedding text
     products["search_text"] = (
@@ -165,6 +180,7 @@ def run_etl():
     collection.create_index("protein_g")
     collection.create_index("price_per_100g")
     collection.create_index("category")
+    collection.create_index("ready_to_eat")
 
     # ==========================================
     # 4. VERIFY
