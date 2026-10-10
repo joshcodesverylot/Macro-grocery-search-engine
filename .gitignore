@@ -1,0 +1,11 @@
+.env
+__pycache__/
+node_modules/
+archive/
+*.pyc
+.venv/
+venv/
+frontend/dist/
+.DS_Store
+project notes.txt
+fastapi.txt
