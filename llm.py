@@ -1,13 +1,17 @@
 import os
+import time
 
 from dotenv import load_dotenv
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 
 from models import MealDraft
 
 load_dotenv()
-MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+# 3.5 flash-lite replaces 2.5-flash-lite for new API keys; quieter than 3.6-flash
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+MAX_TRANSIENT_RETRIES = 3
 
 _client = None
 
@@ -25,20 +29,33 @@ def get_client():
 def draft_meal(prompt, system_instruction=None):
     """One Gemini call that must return a MealDraft.
 
-    Raises pydantic.ValidationError if the reply doesn't fit the schema, and
-    google.genai.errors.APIError on API problems (bad key, rate limit). planner.py decides what to retry.
+    Retries briefly on 503/UNAVAILABLE. Raises pydantic.ValidationError if the reply
+    doesn't fit the schema; other API errors go up to planner.py / api.py.
     """
-    response = get_client().models.generate_content(
-        model=MODEL_NAME,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=system_instruction,
-            response_mime_type="application/json",
-            response_json_schema=MealDraft.model_json_schema(),
-            temperature=0.7,
-        ),
+    config = types.GenerateContentConfig(
+        system_instruction=system_instruction,
+        response_mime_type="application/json",
+        response_json_schema=MealDraft.model_json_schema(),
+        temperature=0.7,
     )
-    return MealDraft.model_validate_json(response.text)
+    last_error = None
+    for attempt in range(1, MAX_TRANSIENT_RETRIES + 1):
+        try:
+            response = get_client().models.generate_content(
+                model=MODEL_NAME,
+                contents=prompt,
+                config=config,
+            )
+            return MealDraft.model_validate_json(response.text)
+        except genai_errors.ServerError as e:
+            last_error = e
+            code = getattr(e, "code", None)
+            if code != 503 or attempt == MAX_TRANSIENT_RETRIES:
+                raise
+            wait = 1.5 * attempt
+            print(f"  Gemini 503 on {MODEL_NAME}, retry {attempt}/{MAX_TRANSIENT_RETRIES} in {wait:.1f}s")
+            time.sleep(wait)
+    raise last_error  # pragma: no cover
 
 
 if __name__ == "__main__":
