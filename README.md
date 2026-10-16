@@ -187,6 +187,7 @@ python playground_meal.py    # Pydantic + optimiser only (no LLM)
 - This prototype generates **one meal** per request (not a full day/week plan).
 
 ## Future implementation
-Generate more meal plans for a week, more like a comprehensive meal planner.
-Some more Front-end changes.
-Quality of code optimizations.
+- Generate more meal plans for a week, more like a comprehensive meal planner.
+- Some more Front-end changes.
+- Quality of code optimizations.
+- Parse realtime data.
