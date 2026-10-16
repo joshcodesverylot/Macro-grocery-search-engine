@@ -128,7 +128,8 @@ export default function App() {
     <div className="app-shell">
       <FoodParticleField />
       <header className="site-header">
-        <h1>Macro Grocery</h1>
+        <h1>MGSE</h1>
+        <p className="full-name">Macro Grocery Search Engine</p>
         <p>One Australian meal matched to protein, calories, and budget.</p>
       </header>
 
