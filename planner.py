@@ -91,7 +91,8 @@ def portion(product, grams):
 def build_meal(request, draft, products, grams, unmet_targets=None):
     items = []
     shopping = []
-    totals = {"kcal": 0.0, "protein_g": 0.0, "fat_g": 0.0, "carbs_g": 0.0, "cost_aud": 0.0}
+    totals = {"kcal": 0.0, "protein_g": 0.0, "fat_g": 0.0, "carbs_g": 0.0}
+    shopping_cost = 0.0
     for product, g in zip(products, grams):
         macros = portion(product, g)
         items.append(MealItem(
@@ -105,13 +106,15 @@ def build_meal(request, draft, products, grams, unmet_targets=None):
         for key in totals:
             totals[key] += macros[key]
         size = float(product["size_g"])
+        pack_price = float(product["cost_aud"])  # shelf pack price from NRAUS
         packs = max(1, math.ceil(g / size)) if size > 0 else 1
+        shopping_cost += pack_price * packs
         shopping.append(ShoppingItem(
             product_id=product["id"],
             brand=product["brand"],
             product_name=product["product_name"],
             size_g=size,
-            pack_price_aud=float(product["cost_aud"]),
+            pack_price_aud=pack_price,
             packs=packs,
         ))
     return Meal(
@@ -125,7 +128,8 @@ def build_meal(request, draft, products, grams, unmet_targets=None):
             protein_g=round(totals["protein_g"], 1),
             fat_g=round(totals["fat_g"], 1),
             carbs_g=round(totals["carbs_g"], 1),
-            cost_aud=round(totals["cost_aud"], 2),
+            # Budget bar uses what you pay at the till, not grams × $/100g
+            cost_aud=round(shopping_cost, 2),
         ),
         unmet_targets=unmet_targets or [],
         shopping_list=shopping,
